@@ -12,6 +12,22 @@ class Worker
 {
     public static void Main()
     {
+        var msgsReceived = 0;
+
+        // Set default interval to publish messages
+        ushort heartbeatInterval = 20;
+        string heartbeatIntervalStr = Environment.GetEnvironmentVariable("HEARTBEAT_INTERVAL_SEC");
+        if (heartbeatIntervalStr == null)
+        {
+            Console.WriteLine("HEARTBEAT_INTERVAL_SEC environment variable not defined, using default.");
+        }
+        else
+        {
+            heartbeatInterval = Convert.ToUInt16(heartbeatIntervalStr);
+        }
+
+        Console.WriteLine("Setting heartbeat interval to {0} ms", heartbeatInterval);
+
         IServiceCollection services = new ServiceCollection();
         var config = new ConfigurationBuilder()
             .AddEnvironmentVariables()
@@ -20,11 +36,11 @@ class Worker
         services.AddRabbitConnection(config);
         var factory = services.BuildServiceProvider().GetService<ConnectionFactory>();
 
-        // No need to explicitly set this value, as defaults are as listed
+        // No need to explicitly set this value, default is already true
         // factory.AutomaticRecoveryEnabled = true;
 
         // Reduce the heartbeat interval so that bad connections are detected sooner than the default of 60s
-        factory.RequestedHeartbeat = 20;
+        factory.RequestedHeartbeat = heartbeatInterval;
         using (var connection = factory.CreateConnection())
         using (var channel = connection.CreateModel())
         {
@@ -37,16 +53,14 @@ class Worker
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
             {
-                var body = ea.Body;
-                var message = Encoding.UTF8.GetString(body);
-                Console.WriteLine(" [x] Received {0}", message);
+//                var body = ea.Body;
+//                var message = Encoding.UTF8.GetString(body);
+                msgsReceived++;
+                Console.WriteLine("Received {0} messages", msgsReceived);
 
-                // Simulate some work here
-                Thread.Sleep(50);
-
-                channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+//                channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
             };
-            channel.BasicConsume(queue: "task_queue", autoAck: false, consumer: consumer);
+            channel.BasicConsume(queue: "task_queue", autoAck: true, consumer: consumer);
 
             while(true) {
                 Thread.Sleep(1000);

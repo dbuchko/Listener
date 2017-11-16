@@ -9,3 +9,5 @@ applications:
   no-route: true
   services:
    - rabbit-svc
+  env:
+    HEARTBEAT_INTERVAL_SEC: 20
