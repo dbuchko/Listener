@@ -26,7 +26,7 @@ class Worker
             heartbeatInterval = Convert.ToUInt16(heartbeatIntervalStr);
         }
 
-        Console.WriteLine("Setting heartbeat interval to {0} ms", heartbeatInterval);
+        Console.WriteLine("Setting heartbeat interval to {0} s", heartbeatInterval);
 
         IServiceCollection services = new ServiceCollection();
         var config = new ConfigurationBuilder()
