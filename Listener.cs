@@ -20,11 +20,6 @@ class Worker
         services.AddRabbitConnection(config);
         var factory = services.BuildServiceProvider().GetService<ConnectionFactory>();
 
-#if DEBUG
-        // for running on local machine
-                factory.HostName = "localhost";
-#endif
-
         // No need to explicitly set this value, as defaults are as listed
         // factory.AutomaticRecoveryEnabled = true;
 
