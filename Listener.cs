@@ -5,11 +5,15 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Logging;
 using Steeltoe.CloudFoundry.Connector.Rabbit;
 using Steeltoe.Extensions.Configuration;
 
 class Worker
 {
+    
+    RabbitMqClientEventSource loggingEventSource = new RabbitMqClientEventSource();
+
     public static void Main()
     {
         var msgsReceived = 0;
@@ -41,6 +45,7 @@ class Worker
 
         // Reduce the heartbeat interval so that bad connections are detected sooner than the default of 60s
         factory.RequestedHeartbeat = heartbeatInterval;
+
         using (var connection = factory.CreateConnection())
         using (var channel = connection.CreateModel())
         {
