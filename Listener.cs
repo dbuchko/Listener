@@ -12,7 +12,7 @@ using Steeltoe.Extensions.Configuration;
 class Worker
 {
     
-    RabbitMqClientEventSource loggingEventSource = new RabbitMqClientEventSource();
+    RabbitMqConsoleEventListener loggingEventSource = new RabbitMqConsoleEventListener();
 
     public static void Main()
     {
