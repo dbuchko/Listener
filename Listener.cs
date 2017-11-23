@@ -60,7 +60,14 @@ class Worker
                 Console.WriteLine("Received {0} messages", msgsReceived);
 
             };
+            consumer.Shutdown += (model, ea) =>
+            {
+                Console.WriteLine("*** Entering Shutdown ***");
+            };
+
             channel.BasicConsume(queue: "task_queue", autoAck: true, consumer: consumer);
+            channel.CallbackException += (sender, e) => Console.WriteLine(e.Exception);
+            channel.ModelShutdown += (sender, e) => Console.WriteLine($"Channel closed: {e.Cause?.ToString()}");
 
             while(true) {
                 Thread.Sleep(1000);
