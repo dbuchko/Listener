@@ -43,6 +43,11 @@ class Worker
         // No need to explicitly set this value, default is already true
         // factory.AutomaticRecoveryEnabled = true;
 
+        // Since we have a durable queue anyways, there should be no need to recreate it on a connection failure.
+        // Otherwise this currently can result in exceptions (if the durable queue home node is down), that
+        // hang the RMQ client.
+        factory.TopologyRecoveryEnabled = false;
+
         // Reduce the heartbeat interval so that bad connections are detected sooner than the default of 60s
         factory.RequestedHeartbeat = heartbeatInterval;
 
