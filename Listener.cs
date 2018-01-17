@@ -11,7 +11,7 @@ using Steeltoe.Extensions.Configuration;
 
 class Worker
 {
-    
+
     public static void Main()
     {
         RabbitMqConsoleEventListener loggingEventSource = new RabbitMqConsoleEventListener();
@@ -32,13 +32,17 @@ class Worker
 
         Console.WriteLine("Setting heartbeat interval to {0} s", heartbeatInterval);
 
-        IServiceCollection services = new ServiceCollection();
-        var config = new ConfigurationBuilder()
-            .AddEnvironmentVariables()
-            .AddCloudFoundry()
-            .Build();
-        services.AddRabbitConnection(config);
-        var factory = services.BuildServiceProvider().GetService<ConnectionFactory>();
+        var factory = new ConnectionFactory() { HostName = "localhost" };
+        if (Environment.GetEnvironmentVariable("VCAP_SERVICES") != null) {
+            // Running on PCF
+            IServiceCollection services = new ServiceCollection();
+            var config = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddCloudFoundry()
+                .Build();
+            services.AddRabbitConnection(config);
+            factory = services.BuildServiceProvider().GetService<ConnectionFactory>();
+        }
 
         // No need to explicitly set this value, default is already true
         // factory.AutomaticRecoveryEnabled = true;
