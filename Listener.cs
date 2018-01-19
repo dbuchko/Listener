@@ -16,12 +16,14 @@ class Worker
     private static IConnection connection;
     private static IModel channel;
     private static EventingBasicConsumer consumer;
+    private static bool topologyRecoveryEnabled=true;
+    private static int msgsReceived = 0;
+
+    private const string taskQueueName = "task_queue";
 
     public static void Main()
     {
         RabbitMqConsoleEventListener loggingEventSource = new RabbitMqConsoleEventListener();
-
-        int msgsReceived = 0;
 
         // Set default interval for heartbeats
         ushort heartbeatInterval = 20;
@@ -61,51 +63,71 @@ class Worker
         // Since we have a durable queue anyways, there should be no need to recreate it on a connection failure.
         // Otherwise this currently can result in exceptions (if the durable queue home node is down), that
         // hangs the RMQ client.
-        String topologyRecoveryEnabled = Environment.GetEnvironmentVariable("TOPOLOGY_RECOVERY_ENABLED");
-        if (topologyRecoveryEnabled != null)
+        String topologyRecoveryEnabledStr = Environment.GetEnvironmentVariable("TOPOLOGY_RECOVERY_ENABLED");
+        if (topologyRecoveryEnabledStr != null)
         {
-            if (topologyRecoveryEnabled.ToUpper().Equals("FALSE"))
+            if (topologyRecoveryEnabledStr.ToUpper().Equals("FALSE"))
             {
                 Console.WriteLine("Disabling topology recovery.");
                 factory.TopologyRecoveryEnabled = false;
+                topologyRecoveryEnabled = false;
             }
         }
 
         // Reduce the heartbeat interval so that bad connections are detected sooner than the default of 60s
         factory.RequestedHeartbeat = heartbeatInterval;
+        using (connection = factory.CreateConnection()) {
 
-        using (connection = factory.CreateConnection())
-        using (channel = connection.CreateModel())
-        {
-            channel.QueueDeclare(queue: "task_queue", durable: true, exclusive: false, autoDelete: false, arguments: null);
-
-            Console.WriteLine(" [*] Waiting for messages.");
-
-            consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (model, ea) =>
+            // An autorecovery occurred
+            connection.RecoverySucceeded += (sender, e) =>
             {
-                msgsReceived++;
-                Console.WriteLine("Received {0} messages", msgsReceived);
-
-            };
-            consumer.Shutdown += (model, ea) =>
-            {
-                Console.WriteLine("*** Entering Shutdown ***");
-            };
-            consumer.ConsumerCancelled += (model, ea) =>
-            {
-                Console.WriteLine("*** Received ConsumerCancelled ***");
+                // If topology recovery is not enabled then we'll need to restart the consumer
+                if (!topologyRecoveryEnabled)
+                {
+                    CreateConsumer(taskQueueName);
+                }
             };
 
-            channel.BasicConsume(queue: "task_queue", autoAck: true, consumer: consumer);
-            channel.CallbackException += (sender, e) => Console.WriteLine(e.Exception);
-            channel.ModelShutdown += (sender, e) => Console.WriteLine($"Channel closed: {e.Cause?.ToString()}");
+            using (channel = connection.CreateModel())
+            {
+                channel.QueueDeclare(queue: taskQueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
 
-            while(true) {
-                Thread.Sleep(1000);
+                Console.WriteLine(" [*] Waiting for messages.");
+
+                CreateConsumer(taskQueueName);
+                channel.CallbackException += (sender, e) => Console.WriteLine(e.Exception);
+                channel.ModelShutdown += (sender, e) => Console.WriteLine($"Channel closed: {e.Cause?.ToString()}");
+
+                while (true)
+                {
+                    Thread.Sleep(1000);
+                }
             }
-        }
 
+        };
     }
 
+
+    protected static void CreateConsumer(string queueName) {
+
+        consumer = new EventingBasicConsumer(channel);
+
+        consumer.Received += (model, ea) =>
+        {
+            msgsReceived++;
+            Console.WriteLine("Received {0} messages", msgsReceived);
+        };
+
+        consumer.Shutdown += (model, ea) =>
+        {
+            Console.WriteLine("*** Entering Shutdown ***");
+        };
+
+        consumer.ConsumerCancelled += (model, ea) =>
+        {
+            Console.WriteLine("*** Received ConsumerCancelled ***");
+        };
+
+        channel.BasicConsume(queue: queueName, autoAck: true, consumer: consumer);
+    }
 }
