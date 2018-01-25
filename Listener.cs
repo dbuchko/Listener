@@ -75,21 +75,32 @@ class Worker
             // An autorecovery occurred
             connection.RecoverySucceeded += (sender, e) =>
             {
-                /*
-                 * Note: if consumer.IsRunning is false here, it could just be because the Registered event
-                 * has not yet fired for the recovered consumer
-                 */
-                Console.WriteLine("RecoverySucceeded, now waiting on Registered event - ThreadId: {0}",
-                    Thread.CurrentThread.ManagedThreadId);
-                if (consumerRegistered.Wait(factory.ContinuationTimeout))
+                if (enableTopologyRecovery)
                 {
-                    Console.WriteLine("RecoverySucceeded, consumer restarted - Consumer tag: {0} IsRunning: {1}",
-                        consumer.ConsumerTag, consumer.IsRunning);
+                    /*
+                    * Note: if consumer.IsRunning is false here, it could just be because the Registered event
+                    * has not yet fired for the recovered consumer
+                    */
+                    Console.WriteLine("RecoverySucceeded, now waiting on Registered event - ThreadId: {0}",
+                        Thread.CurrentThread.ManagedThreadId);
+                    if (consumerRegistered.Wait(factory.ContinuationTimeout))
+                    {
+                        Console.WriteLine("RecoverySucceeded, consumer restarted - Consumer tag: {0} IsRunning: {1}",
+                            consumer.ConsumerTag, consumer.IsRunning);
+                    }
+                    else
+                    {
+                        Console.WriteLine("RecoverySucceeded, consumer did not restart! - Consumer tag: {0}",
+                            consumer.ConsumerTag);
+                        CreateConsumer(taskQueueName);
+                    }
                 }
                 else
                 {
-                    Console.WriteLine("RecoverySucceeded, consumer did not restart! - Consumer tag: {0}",
-                        consumer.ConsumerTag);
+                    /*
+                     * Without topology recovery enabled, we are forced to create a new consumer
+                     */
+                    Console.WriteLine("RecoverySucceeded, topology recovery disabled, creating a new consumer");
                     CreateConsumer(taskQueueName);
                 }
             };
@@ -138,15 +149,16 @@ class Worker
         consumerLock.EnterWriteLock();
         try
         {
-            if (consumer != null)
-            {
-                Console.WriteLine("Cancelling consumer with tag: {0} ThreadId: {1}",
-                    consumer.ConsumerTag, Thread.CurrentThread.ManagedThreadId);
-                consumer.Model.BasicCancel(consumer.ConsumerTag);
-                consumer = null;
-            }
+            /*
+             * NB: there is no need to cancel an existing consumer because an error will
+             * have already cancelled it
+             */
+            Console.WriteLine("Creating new EventingBasicConsumer object - ThreadId: {0}",
+                Thread.CurrentThread.ManagedThreadId);
             consumer = new EventingBasicConsumer(channel);
             consumerRegistered.Reset();
+            Console.WriteLine("New EventingBasicConsumer object is created - ThreadId: {0}",
+                Thread.CurrentThread.ManagedThreadId);
         }
         finally
         {
