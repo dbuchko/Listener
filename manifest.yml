@@ -1,7 +1,7 @@
 ﻿---
 applications:
 - name: listener
-  memory: 128M
+  memory: 256M
   instances: 1
   path: .
   buildpack: dotnet_core_buildpack
@@ -11,3 +11,5 @@ applications:
    - rabbit-svc
   env:
     HEARTBEAT_INTERVAL_SEC: 20
+    TOPOLOGY_RECOVERY_ENABLED: true
+    QUEUE_NAME: task_queue

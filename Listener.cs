@@ -1,21 +1,25 @@
 ﻿using System;
 using System.Threading;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Logging;
+using Steeltoe.CloudFoundry.Connector.Rabbit;
+using Steeltoe.Extensions.Configuration;
 
 class Worker
 {
     private static ConnectionFactory factory;
     private static IConnection connection;
+    private static IServiceCollection services;
     private static IModel channel;
     private static EventingBasicConsumer consumer;
     private static readonly ReaderWriterLockSlim consumerLock = new ReaderWriterLockSlim();
     private static readonly ManualResetEventSlim consumerRegistered = new ManualResetEventSlim();
     private static bool enableTopologyRecovery = true;
     private static int msgsReceived = 0;
-
-    private const string taskQueueName = "task_queue";
+    private static string taskQueueName;
 
     public static void Main()
     {
@@ -46,15 +50,36 @@ class Worker
         }
         Console.WriteLine("Port: {0}", port);
 
-        factory = new ConnectionFactory()
+        if (Environment.GetEnvironmentVariable("VCAP_SERVICES") == null)
         {
-            HostName = "shostakovich",
-            UserName = "guest",
-            Password = "guest",
-            Port = port,
-            AutomaticRecoveryEnabled = true,
-            RequestedHeartbeat = heartbeatInterval
-        };
+            // Not running on Cloud Foundry
+            factory = new ConnectionFactory()
+            {
+                HostName = "localhost",
+                UserName = "guest",
+                Password = "guest",
+                Port = port,
+                AutomaticRecoveryEnabled = true,
+                RequestedHeartbeat = heartbeatInterval
+            };
+
+        } else {
+            // Running on PCF
+            services = new ServiceCollection();
+            var config = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddCloudFoundry()
+                .Build();
+            services.AddRabbitConnection(config);
+            factory = services.BuildServiceProvider().GetService<ConnectionFactory>();
+
+        }
+
+        taskQueueName = Environment.GetEnvironmentVariable("QUEUE_NAME");
+        if (taskQueueName == null) {
+            taskQueueName = "task_queue";
+        }
+        Console.WriteLine("Setting queue name to {0}", taskQueueName);
 
         // Since we have a durable queue anyways, there should be no need to recreate it on a connection failure.
         // Otherwise this currently can result in exceptions (if the durable queue home node is down), that
